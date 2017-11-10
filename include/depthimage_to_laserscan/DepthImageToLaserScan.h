@@ -63,7 +63,7 @@ namespace depthimage_to_laserscan
      * @return sensor_msgs::LaserScanPtr for the center row(s) of the depth image.
      * 
      */
-    sensor_msgs::LaserScanPtr convert_msg(const sensor_msgs::ImageConstPtr& depth_msg,
+    std::vector<sensor_msgs::LaserScanPtr> convert_msg(const sensor_msgs::ImageConstPtr& depth_msg,
 					   const sensor_msgs::CameraInfoConstPtr& info_msg);
     
     /**
@@ -181,41 +181,43 @@ namespace depthimage_to_laserscan
       const T* depth_row = reinterpret_cast<const T*>(&depth_msg->data[0]);
       int row_step = depth_msg->step / sizeof(T);
 
+      
       int offset = (int)(cam_model.cy()-scan_height/2);
       depth_row += offset*row_step; // Offset to center of image
 
-      for(int v = offset; v < offset+scan_height_; v++, depth_row += row_step){
-		for (int u = 0; u < (int)depth_msg->width; u++) // Loop over each pixel in row
-		{	
-		  T depth = depth_row[u];
-		  
-		  double r = depth; // Assign to pass through NaNs and Infs
-		  double th = -atan2((double)(u - center_x) * constant_x, unit_scaling); // Atan2(x, z), but depth divides out
-		  int index = (th - scan_msg->angle_min) / scan_msg->angle_increment;
-		  
-		  if (depthimage_to_laserscan::DepthTraits<T>::valid(depth)){ // Not NaN or Inf
-		    // Calculate in XYZ
-		    double x = (u - center_x) * depth * constant_x;
-		    double z = depthimage_to_laserscan::DepthTraits<T>::toMeters(depth);
-		    
-		    // Calculate actual distance
-		    r = sqrt(pow(x, 2.0) + pow(z, 2.0));
-		  }
-	  
-	  // Determine if this point should be used.
-	  if(use_point(r, scan_msg->ranges[index], scan_msg->range_min, scan_msg->range_max)){
-	    scan_msg->ranges[index] = r;
-	  }
-	}
+      for(int v = offset; v < offset+scan_height; v++, depth_row += row_step){
+        for (int u = 0; u < (int)depth_msg->width; u++) // Loop over each pixel in row
+        {	
+          T depth = depth_row[u];
+          
+          double r = depth; // Assign to pass through NaNs and Infs
+          double th = -atan2((double)(u - center_x) * constant_x, unit_scaling); // Atan2(x, z), but depth divides out
+          int index = (th - scan_msg->angle_min) / scan_msg->angle_increment;
+          
+          if (depthimage_to_laserscan::DepthTraits<T>::valid(depth)){ // Not NaN or Inf
+            // Calculate in XYZ
+            double x = (u - center_x) * depth * constant_x;
+            double z = depthimage_to_laserscan::DepthTraits<T>::toMeters(depth);
+            
+            // Calculate actual distance
+            r = sqrt(pow(x, 2.0) + pow(z, 2.0));
+          }
+        
+        // Determine if this point should be used.
+        if(use_point(r, scan_msg->ranges[index], scan_msg->range_min, scan_msg->range_max)){
+          scan_msg->ranges[index] = r;
+        }
       }
     }
+  }
     
     image_geometry::PinholeCameraModel cam_model_; ///< image_geometry helper class for managing sensor_msgs/CameraInfo messages.
     
     float scan_time_; ///< Stores the time between scans.
     float range_min_; ///< Stores the current minimum range to use.
     float range_max_; ///< Stores the current maximum range to use.
-    int scan_height_; ///< Number of pixel rows to use when producing a laserscan from an area.
+    //int scan_height_; ///< Number of pixel rows to use when producing a laserscan from an area.
+    std::vector<int> scan_height_vec;
     std::string output_frame_id_; ///< Output frame_id for each laserscan.  This is likely NOT the camera's frame_id.
   };
   

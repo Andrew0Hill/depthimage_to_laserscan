@@ -45,6 +45,8 @@ DepthImageToLaserScanROS::DepthImageToLaserScanROS(ros::NodeHandle& n, ros::Node
   
   // Lazy subscription to depth image topic
   pub_ = n.advertise<sensor_msgs::LaserScan>("scan", 10, boost::bind(&DepthImageToLaserScanROS::connectCb, this, _1), boost::bind(&DepthImageToLaserScanROS::disconnectCb, this, _1));
+  pub2_ = n.advertise<sensor_msgs::LaserScan>("scan2", 10, boost::bind(&DepthImageToLaserScanROS::connectCb, this, _1), boost::bind(&DepthImageToLaserScanROS::disconnectCb, this, _1));
+  pub3_ = n.advertise<sensor_msgs::LaserScan>("scan3", 10, boost::bind(&DepthImageToLaserScanROS::connectCb, this, _1), boost::bind(&DepthImageToLaserScanROS::disconnectCb, this, _1));
 }
 
 DepthImageToLaserScanROS::~DepthImageToLaserScanROS(){
@@ -57,8 +59,11 @@ void DepthImageToLaserScanROS::depthCb(const sensor_msgs::ImageConstPtr& depth_m
 	      const sensor_msgs::CameraInfoConstPtr& info_msg){
   try
   {
-    sensor_msgs::LaserScanPtr scan_msg = dtl_.convert_msg(depth_msg, info_msg);
-    pub_.publish(scan_msg);
+    std::vector<sensor_msgs::LaserScanPtr> scan_msg = dtl_.convert_msg(depth_msg, info_msg);
+
+    pub_.publish(scan_msg[0]);
+    pub2_.publish(scan_msg[1]);
+    pub3_.publish(scan_msg[2]);
   }
   catch (std::runtime_error& e)
   {

@@ -36,6 +36,10 @@
 using namespace depthimage_to_laserscan;
   
 DepthImageToLaserScan::DepthImageToLaserScan(){
+  scan_height_vec = std::vector<int>();
+  scan_height_vec.push_back(5);
+  scan_height_vec.push_back(10);
+  scan_height_vec.push_back(15);
 }
 
 DepthImageToLaserScan::~DepthImageToLaserScan(){
@@ -80,7 +84,7 @@ bool DepthImageToLaserScan::use_point(const float new_value, const float old_val
   return shorter_check;
 }
 
-sensor_msgs::LaserScanPtr DepthImageToLaserScan::convert_msg(const sensor_msgs::ImageConstPtr& depth_msg,
+std::vector<sensor_msgs::LaserScanPtr> DepthImageToLaserScan::convert_msg(const sensor_msgs::ImageConstPtr& depth_msg,
 	      const sensor_msgs::CameraInfoConstPtr& info_msg){
   // Set camera model
   cam_model_.fromCameraInfo(info_msg);
@@ -102,46 +106,54 @@ sensor_msgs::LaserScanPtr DepthImageToLaserScan::convert_msg(const sensor_msgs::
   double angle_min = -angle_between_rays(center_ray, right_ray); // Negative because the laserscan message expects an opposite rotation of that from the depth image
   
   // Fill in laserscan message
-  sensor_msgs::LaserScanPtr scan_msg(new sensor_msgs::LaserScan());
-  scan_msg->header = depth_msg->header;
-  if(output_frame_id_.length() > 0){
-    scan_msg->header.frame_id = output_frame_id_;
+  //sensor_msgs::LaserScanPtr scan_msg(new sensor_msgs::LaserScan());
+  // Vector of LaserScanPtr
+  std::vector<sensor_msgs::LaserScanPtr> scan_msg_vec = std::vector<sensor_msgs::LaserScanPtr>(3);
+  // Initialize the vector of LaserScanPtr
+  for (int i = 0; i < scan_msg_vec.size(); ++i){
+     scan_msg_vec[i] = sensor_msgs::LaserScanPtr();
   }
-  scan_msg->angle_min = angle_min;
-  scan_msg->angle_max = angle_max;
-  scan_msg->angle_increment = (scan_msg->angle_max - scan_msg->angle_min) / (depth_msg->width - 1);
-  scan_msg->time_increment = 0.0;
-  scan_msg->scan_time = scan_time_;
-  scan_msg->range_min = range_min_;
-  scan_msg->range_max = range_max_;
-  
-  // Check scan_height vs image_height
-  if(scan_height_/2 > cam_model_.cy() || scan_height_/2 > depth_msg->height - cam_model_.cy()){
-    std::stringstream ss;
-    ss << "scan_height ( " << scan_height_ << " pixels) is too large for the image height.";
-    throw std::runtime_error(ss.str());
-  }
+  int index = 0;
+  for(std::vector<sensor_msgs::LaserScanPtr>::iterator it = scan_msg_vec.begin(); it != scan_msg_vec.end(); ++it){
+      (*it)->header = depth_msg->header;
+      if(output_frame_id_.length() > 0){
+        (*it)->header.frame_id = output_frame_id_;
+      }
+      (*it)->angle_min = angle_min;
+      (*it)->angle_max = angle_max;
+      (*it)->angle_increment = ((*it)->angle_max - (*it)->angle_min) / (depth_msg->width - 1);
+      (*it)->time_increment = 0.0;
+      (*it)->scan_time = scan_time_;
+      (*it)->range_min = range_min_;
+      (*it)->range_max = range_max_;
+      
+      // Check scan_height vs image_height
+      if(scan_height_vec[index]/2 > cam_model_.cy() || scan_height_vec[index]/2 > depth_msg->height - cam_model_.cy()){
+        std::stringstream ss;
+        ss << "scan_height ( " << scan_height_vec[index] << " pixels) is too large for the image height.";
+        throw std::runtime_error(ss.str());
+      }
 
-  // Calculate and fill the ranges
-  uint32_t ranges_size = depth_msg->width;
-  scan_msg->ranges.assign(ranges_size, std::numeric_limits<float>::quiet_NaN());
-  
-  if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
-  {
-    convert<uint16_t>(depth_msg, cam_model_, scan_msg, scan_height_);
-  }
-  else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
-  {
-    convert<float>(depth_msg, cam_model_, scan_msg, scan_height_);
-  }
-  else
-  {
-    std::stringstream ss;
-    ss << "Depth image has unsupported encoding: " << depth_msg->encoding;
-    throw std::runtime_error(ss.str());
-  }
-  
-  return scan_msg;
+      // Calculate and fill the ranges
+      uint32_t ranges_size = depth_msg->width;
+      (*it)->ranges.assign(ranges_size, std::numeric_limits<float>::quiet_NaN());
+      
+      if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
+      {
+        convert<uint16_t>(depth_msg, cam_model_, scan_msg_vec[index], scan_height_vec[index]);
+      }
+      else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
+      {
+        convert<float>(depth_msg, cam_model_, scan_msg_vec[index], scan_height_vec[index]);
+      }
+      else
+      {
+        std::stringstream ss;
+        ss << "Depth image has unsupported encoding: " << depth_msg->encoding;
+        throw std::runtime_error(ss.str());
+      }
+  }  
+  return scan_msg_vec;
 }
 
 void DepthImageToLaserScan::set_scan_time(const float scan_time){
@@ -154,7 +166,7 @@ void DepthImageToLaserScan::set_range_limits(const float range_min, const float 
 }
 
 void DepthImageToLaserScan::set_scan_height(const int scan_height){
-  scan_height_ = scan_height;
+  //scan_height_ = scan_height;
 }
 
 void DepthImageToLaserScan::set_output_frame(const std::string output_frame_id){
